@@ -8,7 +8,6 @@ public class DosaBackendApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(DosaBackendApplication.class, args);
-        System.out.println("Github check");
     }
 
 }
