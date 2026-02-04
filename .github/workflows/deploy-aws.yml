@@ -23,16 +23,16 @@ jobs:
         working-directory: dosa_backend
         run: |
           chmod +x ./gradlew
-          ./gradlew clean build -x test
+          ./gradlew clean bootJar -x test --no-daemon
 
       - name: Deploy jar -> /opt/dosa_backend/app.jar and restart
         run: |
           set -e
-          JAR=$(ls -1 dosa_backend/build/libs/*.jar | head -n 1)
+          JAR=$(ls -1 dosa_backend/build/libs/*.jar | grep -v plain | head -n 1)
           echo "Jar: $JAR"
 
-          sudo cp "$JAR" /opt/dosa_backend/app.jar
-          sudo chown dosa:dosa /opt/dosa_backend/app.jar
+          sudo /bin/cp "$JAR" /opt/dosa_backend/app.jar
+          sudo /bin/chown dosa:dosa /opt/dosa_backend/app.jar
 
-          sudo systemctl restart dosa_backend
-          sudo systemctl status dosa_backend --no-pager
+          sudo /bin/systemctl restart dosa_backend
+          sudo /bin/systemctl status dosa_backend --no-pager
