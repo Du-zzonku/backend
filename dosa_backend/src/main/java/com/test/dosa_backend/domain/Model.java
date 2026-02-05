@@ -1,5 +1,6 @@
 package com.test.dosa_backend.domain;
 
+import com.test.dosa_backend.config.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -7,7 +8,7 @@ import lombok.Getter;
 
 @Entity
 @Getter
-public class Model {
+public class Model extends BaseEntity {
 
     @Id
     private String modelId;
