@@ -1,14 +1,14 @@
 package com.test.dosa_backend.service;
 
-import com.test.dosa_backend.dto.ModelInfoDto;
-import com.test.dosa_backend.dto.ModelResponseDto;
-import com.test.dosa_backend.dto.NodeInfoDto;
-import com.test.dosa_backend.dto.PartInfoDto;
+import com.test.dosa_backend.domain.Model;
+import com.test.dosa_backend.dto.*;
 import com.test.dosa_backend.repository.AssemblyNodeRepository;
 import com.test.dosa_backend.repository.ModelRepository;
 import com.test.dosa_backend.repository.PartRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +37,12 @@ public class ModelService {
                 .toList();
 
         return ModelResponseDto.of(modelInfo, parts, nodes);
+    }
+
+    @Transactional(readOnly = true)
+    public ModelSliceDto getModelIds(Pageable pageable) {
+        Slice<Model> slice = modelRepository.findAllBy(pageable);
+        return new ModelSliceDto(slice);
     }
 
 }

@@ -21,4 +21,6 @@ public class Part {
 
     private String summary;
 
+    private String materialType;
+
 }

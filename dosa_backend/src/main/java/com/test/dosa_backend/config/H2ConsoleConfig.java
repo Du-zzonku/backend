@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class H2ConsoleConfig {
 
-    @Bean
+
     ServletRegistrationBean<JakartaWebServlet> h2Console() {
         return new ServletRegistrationBean<>(
                 new org.h2.server.web.JakartaWebServlet(),
