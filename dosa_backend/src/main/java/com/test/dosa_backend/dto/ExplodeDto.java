@@ -15,10 +15,16 @@ public class ExplodeDto {
 
     private Double distance;
 
+    private Double start;
+
+    private Double duration;
+
     public static ExplodeDto fromNode(AssemblyNode node) {
         return ExplodeDto.builder()
                 .dir(List.of(node.getExplodeDirX(), node.getExplodeDirY(), node.getExplodeDirZ()))
                 .distance(node.getExplodeDistance())
+                .start(node.getExplodeStart())
+                .duration(node.getExplodeDuration())
                 .build();
     }
 
