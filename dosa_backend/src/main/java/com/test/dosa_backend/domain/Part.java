@@ -1,11 +1,12 @@
 package com.test.dosa_backend.domain;
 
+import com.test.dosa_backend.config.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 
 @Entity
 @Getter
-public class Part {
+public class Part extends BaseEntity {
 
     @Id
     private String partId;
@@ -20,5 +21,7 @@ public class Part {
     private String glbUrl;
 
     private String summary;
+
+    private String materialType;
 
 }

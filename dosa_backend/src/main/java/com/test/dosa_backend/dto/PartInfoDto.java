@@ -17,12 +17,15 @@ public class PartInfoDto {
 
     private String summary;
 
+    private String materialType;
+
     public static PartInfoDto fromPart(Part part) {
         return PartInfoDto.builder()
                 .partId(part.getPartId())
                 .displayNameKo(part.getDisplayNameKo())
                 .glbUrl(part.getGlbUrl())
                 .summary(part.getSummary())
+                .materialType(part.getMaterialType())
                 .build();
     }
 

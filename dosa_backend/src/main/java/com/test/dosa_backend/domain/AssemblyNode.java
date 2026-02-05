@@ -1,11 +1,12 @@
 package com.test.dosa_backend.domain;
 
+import com.test.dosa_backend.config.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 
 @Entity
 @Getter
-public class AssemblyNode {
+public class AssemblyNode extends BaseEntity {
 
     @Id
     private String nodeId;
