@@ -1,0 +1,38 @@
+name: Deploy to EC2 (self-hosted, jar + systemd)
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Build (Gradle)
+        working-directory: dosa_backend
+        run: |
+          chmod +x ./gradlew
+          ./gradlew clean bootJar -x test --no-daemon
+
+      - name: Deploy jar -> /opt/dosa_backend/app.jar and restart
+        run: |
+          set -e
+          JAR=$(ls -1 dosa_backend/build/libs/*.jar | grep -v plain | head -n 1)
+          echo "Jar: $JAR"
+
+          sudo /bin/cp "$JAR" /opt/dosa_backend/app.jar
+          sudo /bin/chown dosa:dosa /opt/dosa_backend/app.jar
+
+          sudo /bin/systemctl restart dosa_backend
+          sudo /bin/systemctl status dosa_backend --no-pager

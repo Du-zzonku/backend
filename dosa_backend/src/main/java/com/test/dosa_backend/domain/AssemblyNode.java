@@ -65,4 +65,10 @@ public class AssemblyNode extends BaseEntity {
     @Column(nullable = false)
     private Double explodeDistance;
 
+    @Column(nullable = false)
+    private Double explodeStart;
+
+    @Column(nullable = false)
+    private Double explodeDuration;
+
 }
