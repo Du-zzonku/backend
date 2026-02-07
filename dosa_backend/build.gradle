@@ -20,18 +20,33 @@ repositories {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'      // WebClient
+    implementation 'org.springframework.boot:spring-boot-starter-validation'  // @Valid, @NotNull 등
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
-    compileOnly 'org.springframework.boot:spring-boot-devtools'
+
+    // IMPORTANT (Spring Boot 4 / Spring Framework 7):
+    // Boot already manages Jackson 3 (package prefix: tools.jackson.*) for WebFlux/WebClient codecs.
+    // Keeping Jackson 2 (com.fasterxml.*) on the classpath creates runtime decoding failures.
+    // So we intentionally DO NOT add jackson-databind here.
+    // swagger-ui
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+
     implementation 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+    // DB (PostgreSQL + pgvector)
     runtimeOnly 'org.postgresql:postgresql'
+    implementation 'com.pgvector:pgvector:0.1.6'
+
+    // PDF ingest
+    implementation 'org.apache.pdfbox:pdfbox:3.0.2'
+
+    // dev/test
+    runtimeOnly 'com.h2database:h2'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
-    // swagger-ui
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
-
 }
 
 tasks.named('test') {
