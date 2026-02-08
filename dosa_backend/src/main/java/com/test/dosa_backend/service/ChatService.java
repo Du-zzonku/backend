@@ -1,8 +1,10 @@
 package com.test.dosa_backend.service;
 
 import com.test.dosa_backend.config.ChatPromptProperties;
+import com.test.dosa_backend.domain.Part;
 import com.test.dosa_backend.dto.ChatDtos;
 import com.test.dosa_backend.openai.OpenAiClient;
+import com.test.dosa_backend.repository.PartRepository;
 import com.test.dosa_backend.util.ImageInputs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,9 +16,11 @@ import tools.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -29,6 +33,8 @@ public class ChatService {
     private static final String DEFAULT_ROOT_SYSTEM_PROMPT = "당신은 과학/공학 학습용 3D 뷰어 서비스의 AI 튜터입니다.";
     private static final int MAX_HISTORY_MESSAGES = 30;
     private static final int DEFAULT_MAX_OUTPUT_TOKENS = 700;
+    private static final String KEY_MODEL = "model";
+    private static final String KEY_PARTS = "parts";
     private static final Map<String, List<String>> MODEL_ID_ALIASES = Map.of(
             "v4_engine", List.of("v4_engine", "v4-engine", "v4 engine", "v4엔진", "v4 엔진"),
             "suspension", List.of("suspension", "서스펜션"),
@@ -39,6 +45,7 @@ public class ChatService {
 
     private final RagService ragService;
     private final OpenAiClient openAiClient;
+    private final PartRepository partRepository;
     private final ChatPromptProperties promptProperties;
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -47,11 +54,13 @@ public class ChatService {
     public ChatService(
             RagService ragService,
             OpenAiClient openAiClient,
+            PartRepository partRepository,
             ChatPromptProperties promptProperties,
             @Value("${openai.chat-model}") String chatModel
     ) {
         this.ragService = ragService;
         this.openAiClient = openAiClient;
+        this.partRepository = partRepository;
         this.promptProperties = promptProperties;
         log.info("ChatService constructor - Received chatModel value: '{}'", chatModel);
         if (chatModel == null || chatModel.isBlank()) {
@@ -81,8 +90,9 @@ public class ChatService {
                 : new RagService.RagResult("", List.of());
 
         String effectiveModelId = resolveEffectiveModelId(extraMetadata);
+        Map<String, Object> metadataForPrompt = enrichMetadataForPrompt(extraMetadata, effectiveModelId);
         AppliedSystemPrompt appliedSystemPrompt = resolveAppliedSystemPrompt(effectiveModelId);
-        String prompt = buildUserPrompt(userText, rag.contextText(), extraMetadata, useRag, effectiveModelId);
+        String prompt = buildUserPrompt(userText, rag.contextText(), metadataForPrompt, useRag, effectiveModelId);
         String instructions = buildSystemInstructions(useRag, appliedSystemPrompt);
         List<OpenAiClient.ChatInputMessage> conversation = buildConversation(history, prompt, normalizedImages);
 
@@ -163,6 +173,142 @@ public class ChatService {
     private String resolveEffectiveModelId(Map<String, Object> metadata) {
         String fromMetadata = canonicalizeModelId(findModelIdFromMetadata(metadata));
         return (fromMetadata == null || fromMetadata.isBlank()) ? null : fromMetadata;
+    }
+
+    private Map<String, Object> enrichMetadataForPrompt(Map<String, Object> metadata, String modelId) {
+        if (metadata == null || metadata.isEmpty()) {
+            return metadata;
+        }
+
+        LinkedHashMap<String, Object> enriched = new LinkedHashMap<>(metadata);
+        sanitizeModelMetadata(enriched, modelId);
+        sanitizeAndEnrichParts(enriched, modelId);
+        return enriched;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void sanitizeModelMetadata(Map<String, Object> metadata, String effectiveModelId) {
+        if (metadata == null) return;
+        Object modelObj = metadata.get(KEY_MODEL);
+        if (!(modelObj instanceof Map<?, ?> modelMap)) {
+            return;
+        }
+
+        String modelId = firstNonBlank(
+                modelMap.get("modelId"),
+                modelMap.get("model_id"),
+                effectiveModelId
+        );
+        String title = textOrNull(modelMap.get("title"));
+
+        LinkedHashMap<String, Object> sanitized = new LinkedHashMap<>();
+        if (modelId != null) {
+            sanitized.put("modelId", canonicalizeModelId(modelId));
+        }
+        if (title != null) {
+            sanitized.put("title", title);
+        }
+        metadata.put(KEY_MODEL, sanitized);
+    }
+
+    private void sanitizeAndEnrichParts(Map<String, Object> metadata, String effectiveModelId) {
+        if (metadata == null) return;
+        List<Map<String, Object>> requestedParts = normalizeParts(metadata.get(KEY_PARTS));
+        if (requestedParts.isEmpty()) {
+            return;
+        }
+
+        List<String> requestedPartIds = requestedParts.stream()
+                .map(this::extractPartId)
+                .filter(id -> id != null && !id.isBlank())
+                .toList();
+        Map<String, Part> dbPartsById = loadPartsById(requestedPartIds, effectiveModelId);
+
+        List<Map<String, Object>> sanitizedParts = new ArrayList<>();
+        for (Map<String, Object> req : requestedParts) {
+            String partId = extractPartId(req);
+            if (partId == null || partId.isBlank()) {
+                continue;
+            }
+
+            Part part = dbPartsById.get(partId);
+            LinkedHashMap<String, Object> out = new LinkedHashMap<>();
+            out.put("partId", partId);
+
+            String displayNameKo = (part != null)
+                    ? textOrNull(part.getDisplayNameKo())
+                    : textOrNull(req.get("displayNameKo"));
+            String summary = (part != null)
+                    ? textOrNull(part.getSummary())
+                    : textOrNull(req.get("summary"));
+
+            if (displayNameKo != null) out.put("displayNameKo", displayNameKo);
+            if (summary != null) out.put("summary", summary);
+
+            sanitizedParts.add(out);
+        }
+        metadata.put(KEY_PARTS, sanitizedParts);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> normalizeParts(Object rawParts) {
+        if (rawParts == null) return List.of();
+        if (rawParts instanceof Map<?, ?> singleMap) {
+            return List.of((Map<String, Object>) singleMap);
+        }
+        if (!(rawParts instanceof List<?> list) || list.isEmpty()) {
+            return List.of();
+        }
+
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) {
+                out.add((Map<String, Object>) map);
+            }
+        }
+        return out;
+    }
+
+    private Map<String, Part> loadPartsById(List<String> partIds, String effectiveModelId) {
+        Map<String, Part> out = new HashMap<>();
+        if (partIds == null || partIds.isEmpty()) {
+            return out;
+        }
+
+        Iterable<Part> parts = partRepository.findAllById(partIds);
+        for (Part p : parts) {
+            if (p == null || p.getPartId() == null) continue;
+            if (effectiveModelId != null && p.getModel() != null && p.getModel().getModelId() != null) {
+                if (!normalizeForMatch(effectiveModelId).equals(normalizeForMatch(p.getModel().getModelId()))) {
+                    continue;
+                }
+            }
+            out.put(p.getPartId(), p);
+        }
+        return out;
+    }
+
+    private String extractPartId(Map<String, Object> part) {
+        if (part == null || part.isEmpty()) return null;
+        String partId = firstNonBlank(part.get("partId"), part.get("part_id"));
+        return (partId == null || partId.isBlank()) ? null : partId.trim();
+    }
+
+    private String firstNonBlank(Object... values) {
+        if (values == null || values.length == 0) return null;
+        for (Object value : values) {
+            String text = textOrNull(value);
+            if (text != null && !text.isBlank()) {
+                return text;
+            }
+        }
+        return null;
+    }
+
+    private String textOrNull(Object value) {
+        if (value == null) return null;
+        String text = String.valueOf(value).trim();
+        return text.isBlank() ? null : text;
     }
 
     private String canonicalizeModelId(String rawModelId) {

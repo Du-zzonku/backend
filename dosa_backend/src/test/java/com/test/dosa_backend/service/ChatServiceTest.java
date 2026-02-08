@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.test.dosa_backend.config.ChatPromptProperties;
+import com.test.dosa_backend.domain.Model;
+import com.test.dosa_backend.domain.Part;
 import com.test.dosa_backend.dto.ChatDtos;
 import com.test.dosa_backend.openai.OpenAiClient;
+import com.test.dosa_backend.repository.PartRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -18,22 +22,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.mockito.Mockito.mock;
-
 class ChatServiceTest {
 
     @Test
     void userMessage_applies_root_and_model_system_prompt_and_includes_history() {
         RagService ragService = mock(RagService.class);
         OpenAiClient openAiClient = mock(OpenAiClient.class);
+        PartRepository partRepository = mock(PartRepository.class);
 
         ChatPromptProperties props = new ChatPromptProperties();
         props.setRootSystemPrompt("ROOT_PROMPT");
         props.setModelSystemPrompts(Map.of("v4_engine", "V4_ENGINE_PROMPT"));
 
+        when(partRepository.findAllById(anyList())).thenReturn(List.of());
+
         ChatService chatService = new ChatService(
                 ragService,
                 openAiClient,
+                partRepository,
                 props,
                 "gpt-5-mini"
         );
@@ -92,6 +98,7 @@ class ChatServiceTest {
     void userMessage_does_not_infer_model_id_when_metadata_missing() {
         RagService ragService = mock(RagService.class);
         OpenAiClient openAiClient = mock(OpenAiClient.class);
+        PartRepository partRepository = mock(PartRepository.class);
 
         ChatPromptProperties props = new ChatPromptProperties();
         props.setRootSystemPrompt("ROOT_PROMPT");
@@ -100,9 +107,12 @@ class ChatServiceTest {
                 "drone", "DRONE_PROMPT"
         ));
 
+        when(partRepository.findAllById(anyList())).thenReturn(List.of());
+
         ChatService chatService = new ChatService(
                 ragService,
                 openAiClient,
+                partRepository,
                 props,
                 "gpt-5-mini"
         );
@@ -129,6 +139,7 @@ class ChatServiceTest {
     void userMessage_recovers_mojibake_prompt_text() {
         RagService ragService = mock(RagService.class);
         OpenAiClient openAiClient = mock(OpenAiClient.class);
+        PartRepository partRepository = mock(PartRepository.class);
 
         String original = "당신은 과학/공학 학습용 3D 뷰어 서비스의 AI 튜터입니다.";
         String mojibake = new String(original.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
@@ -137,9 +148,12 @@ class ChatServiceTest {
         props.setRootSystemPrompt(mojibake);
         props.setModelSystemPrompts(Map.of());
 
+        when(partRepository.findAllById(anyList())).thenReturn(List.of());
+
         ChatService chatService = new ChatService(
                 ragService,
                 openAiClient,
+                partRepository,
                 props,
                 "gpt-5-mini"
         );
@@ -155,5 +169,61 @@ class ChatServiceTest {
         );
 
         assertThat(result.appliedSystemPrompt().rootSystemPrompt()).isEqualTo(original);
+    }
+
+    @Test
+    void userMessage_enriches_parts_from_db_and_excludes_material_type() {
+        RagService ragService = mock(RagService.class);
+        OpenAiClient openAiClient = mock(OpenAiClient.class);
+        PartRepository partRepository = mock(PartRepository.class);
+
+        ChatPromptProperties props = new ChatPromptProperties();
+        props.setRootSystemPrompt("ROOT_PROMPT");
+        props.setModelSystemPrompts(Map.of("v4_engine", "V4_ENGINE_PROMPT"));
+
+        Part crankshaft = mock(Part.class);
+        Model model = mock(Model.class);
+        when(model.getModelId()).thenReturn("v4_engine");
+        when(crankshaft.getPartId()).thenReturn("CRANKSHAFT");
+        when(crankshaft.getModel()).thenReturn(model);
+        when(crankshaft.getDisplayNameKo()).thenReturn("크랭크샤프트");
+        when(crankshaft.getSummary()).thenReturn("엔진의 중심 축");
+
+        when(partRepository.findAllById(anyList())).thenReturn(List.of(crankshaft));
+        when(openAiClient.generateResponse(anyString(), anyString(), anyList(), anyInt()))
+                .thenReturn("assistant answer");
+
+        ChatService chatService = new ChatService(
+                ragService,
+                openAiClient,
+                partRepository,
+                props,
+                "gpt-5-mini"
+        );
+
+        chatService.userMessage(
+                "설명해줘",
+                List.of(),
+                List.of(),
+                Map.of(
+                        "model", Map.of("modelId", "v4_engine", "title", "V4 Engine Assembly"),
+                        "parts", List.of(Map.of("partId", "CRANKSHAFT", "materialType", "METAL_STEEL_MACHINED"))
+                ),
+                null
+        );
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<OpenAiClient.ChatInputMessage>> messagesCaptor = (ArgumentCaptor<List<OpenAiClient.ChatInputMessage>>) (ArgumentCaptor<?>) ArgumentCaptor.forClass(List.class);
+        verify(openAiClient).generateResponse(anyString(), anyString(), messagesCaptor.capture(), anyInt());
+        String finalPrompt = messagesCaptor.getValue().get(messagesCaptor.getValue().size() - 1).text();
+
+        assertThat(finalPrompt).contains("\"partId\":\"CRANKSHAFT\"");
+        assertThat(finalPrompt).contains("\"displayNameKo\":\"크랭크샤프트\"");
+        assertThat(finalPrompt).contains("\"summary\":\"엔진의 중심 축\"");
+        assertThat(finalPrompt).doesNotContain("materialType");
+        assertThat(finalPrompt).contains("\"modelId\":\"v4_engine\"");
+        assertThat(finalPrompt).contains("\"title\":\"V4 Engine Assembly\"");
+        assertThat(finalPrompt).doesNotContain("\"overview\"");
+        assertThat(finalPrompt).doesNotContain("\"theory\"");
     }
 }
