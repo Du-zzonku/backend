@@ -16,5 +16,7 @@ public class PdfRequestDto {
 
     private List<ChatMessage> chatLogs;
 
+    private List<QuizSet> quizs;
+
 
 }

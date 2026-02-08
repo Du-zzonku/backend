@@ -69,5 +69,12 @@
         <strong th:text="${chat.question}">User</strong>:
         <span th:text="${chat.answer}">대화 내용</span>
     </div>
+
+    <h3>퀴즈 기록</h3>
+    <div th:each="quiz : ${quizs}" class="chat-box">
+        <strong th:text="${quiz.getQuizQuestion()}">퀴즈 질문</strong>:
+        <span th:text="${quiz.getQuizAnswer()}">퀴즈 정답</span>
+    </div>
+
 </body>
 </html>
