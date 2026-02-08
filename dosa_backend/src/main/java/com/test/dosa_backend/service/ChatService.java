@@ -11,10 +11,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -25,6 +29,13 @@ public class ChatService {
     private static final String DEFAULT_ROOT_SYSTEM_PROMPT = "당신은 과학/공학 학습용 3D 뷰어 서비스의 AI 튜터입니다.";
     private static final int MAX_HISTORY_MESSAGES = 30;
     private static final int DEFAULT_MAX_OUTPUT_TOKENS = 700;
+    private static final Map<String, List<String>> MODEL_ID_ALIASES = Map.of(
+            "v4_engine", List.of("v4_engine", "v4-engine", "v4 engine", "v4엔진", "v4 엔진"),
+            "suspension", List.of("suspension", "서스펜션"),
+            "robot_gripper", List.of("robot_gripper", "robot-gripper", "robot gripper", "그리퍼", "로봇그리퍼", "로봇 그리퍼"),
+            "drone", List.of("drone", "드론"),
+            "robot_arm", List.of("robot_arm", "robot-arm", "robot arm", "로봇암", "로봇 암")
+    );
 
     private final RagService ragService;
     private final OpenAiClient openAiClient;
@@ -69,9 +80,10 @@ public class ChatService {
         RagService.RagResult rag = useRag ? ragService.retrieve(userText, 6, documentIds)
                 : new RagService.RagResult("", List.of());
 
-        String effectiveModelId = findModelIdFromMetadata(extraMetadata);
+        String effectiveModelId = resolveEffectiveModelId(extraMetadata);
+        AppliedSystemPrompt appliedSystemPrompt = resolveAppliedSystemPrompt(effectiveModelId);
         String prompt = buildUserPrompt(userText, rag.contextText(), extraMetadata, useRag, effectiveModelId);
-        String instructions = buildSystemInstructions(useRag, effectiveModelId);
+        String instructions = buildSystemInstructions(useRag, appliedSystemPrompt);
         List<OpenAiClient.ChatInputMessage> conversation = buildConversation(history, prompt, normalizedImages);
 
         log.info("Using chat model='{}', modelId='{}', historyCount={}",
@@ -80,7 +92,7 @@ public class ChatService {
                 conversation.size() - 1);
 
         String assistantText = openAiClient.generateResponse(chatModel, instructions, conversation, DEFAULT_MAX_OUTPUT_TOKENS);
-        return new ChatTurnResult(assistantText, rag.citations());
+        return new ChatTurnResult(assistantText, rag.citations(), appliedSystemPrompt);
     }
 
     private List<OpenAiClient.ChatInputMessage> buildConversation(
@@ -110,19 +122,13 @@ public class ChatService {
         return out;
     }
 
-    private String buildSystemInstructions(boolean useRag, String modelId) {
-        String root = promptProperties.getRootSystemPrompt();
-        if (root == null || root.isBlank()) {
-            root = DEFAULT_ROOT_SYSTEM_PROMPT;
-        }
-
+    private String buildSystemInstructions(boolean useRag, AppliedSystemPrompt appliedSystemPrompt) {
         StringBuilder sb = new StringBuilder();
-        sb.append(root.trim());
+        sb.append(appliedSystemPrompt.rootSystemPrompt());
 
-        String modelPrompt = promptProperties.findModelSystemPrompt(modelId);
-        if (modelPrompt != null && !modelPrompt.isBlank()) {
-            sb.append("\n\n[Model System Prompt: ").append(modelId).append("]\n");
-            sb.append(modelPrompt.trim());
+        if (appliedSystemPrompt.modelSystemPromptApplied()) {
+            sb.append("\n\n[Model System Prompt: ").append(appliedSystemPrompt.modelId()).append("]\n");
+            sb.append(appliedSystemPrompt.modelSystemPrompt());
         }
 
         sb.append("\n\n[Global Answer Rules]\n");
@@ -139,6 +145,103 @@ public class ChatService {
             sb.append("- 불확실하면 단정하지 말고 추가 자료 필요성을 명시\n");
         }
         return sb.toString();
+    }
+
+    private AppliedSystemPrompt resolveAppliedSystemPrompt(String modelId) {
+        String root = normalizePromptText(promptProperties.getRootSystemPrompt(), DEFAULT_ROOT_SYSTEM_PROMPT);
+        String resolvedModelId = (modelId == null || modelId.isBlank()) ? null : modelId.trim();
+        String modelPrompt = normalizePromptText(promptProperties.findModelSystemPrompt(resolvedModelId), "");
+        boolean applied = modelPrompt != null && !modelPrompt.isBlank();
+        return new AppliedSystemPrompt(
+                root,
+                resolvedModelId,
+                applied,
+                applied ? modelPrompt : null
+        );
+    }
+
+    private String resolveEffectiveModelId(Map<String, Object> metadata) {
+        String fromMetadata = canonicalizeModelId(findModelIdFromMetadata(metadata));
+        return (fromMetadata == null || fromMetadata.isBlank()) ? null : fromMetadata;
+    }
+
+    private String canonicalizeModelId(String rawModelId) {
+        if (rawModelId == null || rawModelId.isBlank()) {
+            return null;
+        }
+        String normalizedRaw = normalizeForMatch(rawModelId);
+        if (normalizedRaw.isBlank()) {
+            return rawModelId.trim();
+        }
+        for (String modelId : knownModelIds()) {
+            String normalizedModelId = normalizeForMatch(modelId);
+            if (normalizedRaw.equals(normalizedModelId)) {
+                return modelId;
+            }
+            for (String alias : aliasesForModel(modelId)) {
+                if (normalizedRaw.equals(normalizeForMatch(alias))) {
+                    return modelId;
+                }
+            }
+        }
+        return rawModelId.trim();
+    }
+
+    private List<String> knownModelIds() {
+        Set<String> ids = new LinkedHashSet<>();
+        ids.addAll(MODEL_ID_ALIASES.keySet());
+        Map<String, String> configured = promptProperties.getModelSystemPrompts();
+        if (configured != null && !configured.isEmpty()) {
+            ids.addAll(configured.keySet());
+        }
+        List<String> out = new ArrayList<>(ids);
+        out.sort(Comparator.naturalOrder());
+        return out;
+    }
+
+    private List<String> aliasesForModel(String modelId) {
+        List<String> aliases = new ArrayList<>();
+        if (modelId != null && !modelId.isBlank()) {
+            aliases.add(modelId);
+            aliases.add(modelId.replace('_', '-'));
+            aliases.add(modelId.replace('_', ' '));
+            aliases.add(modelId.replace("_", ""));
+            String normalizedKey = promptProperties.normalizeKey(modelId);
+            aliases.addAll(MODEL_ID_ALIASES.getOrDefault(normalizedKey, List.of()));
+        }
+        return aliases;
+    }
+
+    private String normalizeForMatch(String value) {
+        if (value == null) return "";
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return normalized.replaceAll("[^a-z0-9가-힣]", "");
+    }
+
+    private String normalizePromptText(String text, String fallback) {
+        String effective = (text == null || text.isBlank()) ? fallback : text;
+        if (effective == null) return "";
+        String trimmed = effective.trim();
+        if (trimmed.isBlank()) return "";
+        if (containsHangul(trimmed)) return trimmed;
+
+        String decoded = new String(trimmed.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8).trim();
+        if (containsHangul(decoded)) {
+            log.warn("Detected mojibake in chat prompt text; recovered UTF-8 prompt.");
+            return decoded;
+        }
+        return trimmed;
+    }
+
+    private boolean containsHangul(String text) {
+        if (text == null || text.isBlank()) return false;
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (ch >= '\uAC00' && ch <= '\uD7A3') {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String buildUserPrompt(
@@ -249,5 +352,16 @@ public class ChatService {
         return role;
     }
 
-    public record ChatTurnResult(String answer, List<RagService.Citation> citations) {}
+    public record ChatTurnResult(String answer, List<RagService.Citation> citations, AppliedSystemPrompt appliedSystemPrompt) {
+        public ChatTurnResult(String answer, List<RagService.Citation> citations) {
+            this(answer, citations, null);
+        }
+    }
+
+    public record AppliedSystemPrompt(
+            String rootSystemPrompt,
+            String modelId,
+            boolean modelSystemPromptApplied,
+            String modelSystemPrompt
+    ) {}
 }

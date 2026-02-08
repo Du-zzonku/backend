@@ -26,8 +26,16 @@ public class ChatDtos {
             @JsonAlias({"part", "selectedParts"}) Object parts
     ) {}
 
+    public record AppliedSystemPrompt(
+            String rootSystemPrompt,
+            String modelId,
+            boolean modelSystemPromptApplied,
+            String modelSystemPrompt
+    ) {}
+
     public record MessageResponse(
             String answer,
-            List<RagService.Citation> citations
+            List<RagService.Citation> citations,
+            AppliedSystemPrompt appliedSystemPrompt
     ) {}
 }

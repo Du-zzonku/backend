@@ -44,7 +44,7 @@ public class ChatController {
                 effectiveMetadata,
                 req.history()
         );
-        return new ChatDtos.MessageResponse(res.answer(), res.citations());
+        return toMessageResponse(res);
     }
 
     @PostMapping(
@@ -71,7 +71,20 @@ public class ChatController {
         List<String> imageInputs = ImageInputs.filesToDataUrls(images);
 
         var res = chatService.userMessage(message, documentIds, imageInputs, extraMetadata, history);
-        return new ChatDtos.MessageResponse(res.answer(), res.citations());
+        return toMessageResponse(res);
+    }
+
+    private ChatDtos.MessageResponse toMessageResponse(ChatService.ChatTurnResult res) {
+        ChatDtos.AppliedSystemPrompt dtoPrompt = null;
+        if (res != null && res.appliedSystemPrompt() != null) {
+            dtoPrompt = new ChatDtos.AppliedSystemPrompt(
+                    res.appliedSystemPrompt().rootSystemPrompt(),
+                    res.appliedSystemPrompt().modelId(),
+                    res.appliedSystemPrompt().modelSystemPromptApplied(),
+                    res.appliedSystemPrompt().modelSystemPrompt()
+            );
+        }
+        return new ChatDtos.MessageResponse(res.answer(), res.citations(), dtoPrompt);
     }
 
     @SuppressWarnings("unchecked")
