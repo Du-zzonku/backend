@@ -29,6 +29,7 @@ public class PdfService {
             context.setVariable("theory", modelRepository.findTheoryByModelId(id));
             context.setVariable("memo", requestDto.getMemo());
             context.setVariable("chatLogs", requestDto.getChatLogs());
+            context.setVariable("quizs", requestDto.getQuizs());
 
             // 2. HTML 템플릿을 문자열로 렌더링 (데이터가 채워진 HTML 생성)
             String htmlContent = templateEngine.process("pdf", context);
