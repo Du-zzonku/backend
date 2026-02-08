@@ -13,6 +13,7 @@ import com.test.dosa_backend.openai.OpenAiClient;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -81,5 +82,78 @@ class ChatServiceTest {
 
         assertThat(result.answer()).isEqualTo("assistant answer");
         assertThat(result.citations()).hasSize(1);
+        assertThat(result.appliedSystemPrompt()).isNotNull();
+        assertThat(result.appliedSystemPrompt().modelId()).isEqualTo("v4_engine");
+        assertThat(result.appliedSystemPrompt().modelSystemPromptApplied()).isTrue();
+        assertThat(result.appliedSystemPrompt().modelSystemPrompt()).isEqualTo("V4_ENGINE_PROMPT");
+    }
+
+    @Test
+    void userMessage_does_not_infer_model_id_when_metadata_missing() {
+        RagService ragService = mock(RagService.class);
+        OpenAiClient openAiClient = mock(OpenAiClient.class);
+
+        ChatPromptProperties props = new ChatPromptProperties();
+        props.setRootSystemPrompt("ROOT_PROMPT");
+        props.setModelSystemPrompts(Map.of(
+                "v4_engine", "V4_ENGINE_PROMPT",
+                "drone", "DRONE_PROMPT"
+        ));
+
+        ChatService chatService = new ChatService(
+                ragService,
+                openAiClient,
+                props,
+                "gpt-5-mini"
+        );
+        when(openAiClient.generateResponse(anyString(), anyString(), anyList(), anyInt()))
+                .thenReturn("assistant answer");
+
+        ChatService.ChatTurnResult result = chatService.userMessage(
+                "v4 엔진의 토크 전달 흐름 설명해줘",
+                List.of(),
+                List.of(),
+                null,
+                null
+        );
+
+        ArgumentCaptor<String> instructionsCaptor = ArgumentCaptor.forClass(String.class);
+        verify(openAiClient).generateResponse(anyString(), instructionsCaptor.capture(), anyList(), anyInt());
+        assertThat(instructionsCaptor.getValue()).doesNotContain("V4_ENGINE_PROMPT");
+        assertThat(result.appliedSystemPrompt().modelId()).isNull();
+        assertThat(result.appliedSystemPrompt().modelSystemPromptApplied()).isFalse();
+        assertThat(result.appliedSystemPrompt().modelSystemPrompt()).isNull();
+    }
+
+    @Test
+    void userMessage_recovers_mojibake_prompt_text() {
+        RagService ragService = mock(RagService.class);
+        OpenAiClient openAiClient = mock(OpenAiClient.class);
+
+        String original = "당신은 과학/공학 학습용 3D 뷰어 서비스의 AI 튜터입니다.";
+        String mojibake = new String(original.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
+
+        ChatPromptProperties props = new ChatPromptProperties();
+        props.setRootSystemPrompt(mojibake);
+        props.setModelSystemPrompts(Map.of());
+
+        ChatService chatService = new ChatService(
+                ragService,
+                openAiClient,
+                props,
+                "gpt-5-mini"
+        );
+        when(openAiClient.generateResponse(anyString(), anyString(), anyList(), anyInt()))
+                .thenReturn("assistant answer");
+
+        ChatService.ChatTurnResult result = chatService.userMessage(
+                "기본 동작 설명",
+                List.of(),
+                List.of(),
+                null,
+                null
+        );
+
+        assertThat(result.appliedSystemPrompt().rootSystemPrompt()).isEqualTo(original);
     }
 }

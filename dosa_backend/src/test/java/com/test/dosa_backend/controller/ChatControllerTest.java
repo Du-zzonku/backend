@@ -37,8 +37,14 @@ class ChatControllerTest {
 
     @Test
     void message_json_accepts_model_parts_history_and_image_urls() throws Exception {
+        ChatService.AppliedSystemPrompt applied = new ChatService.AppliedSystemPrompt(
+                "ROOT_PROMPT",
+                "v4_engine",
+                true,
+                "V4_ENGINE_PROMPT"
+        );
         when(chatService.userMessage(anyString(), any(), any(), any(), any()))
-                .thenReturn(new ChatService.ChatTurnResult("ok", List.of()));
+                .thenReturn(new ChatService.ChatTurnResult("ok", List.of(), applied));
 
         String body = """
                 {
@@ -61,11 +67,13 @@ class ChatControllerTest {
                 }
                 """;
 
-        mvc.perform(post("/v1/chat/messages")
+                mvc.perform(post("/v1/chat/messages")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.answer").value("ok"));
+                .andExpect(jsonPath("$.answer").value("ok"))
+                .andExpect(jsonPath("$.appliedSystemPrompt.modelId").value("v4_engine"))
+                .andExpect(jsonPath("$.appliedSystemPrompt.modelSystemPromptApplied").value(true));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> metaCaptor = (ArgumentCaptor<Map<String, Object>>) (ArgumentCaptor<?>) ArgumentCaptor.forClass(Map.class);
