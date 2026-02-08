@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <style>
+        /* PDF 전용 CSS: A4 사이즈 설정 */
+        @page {
+            size: A4;
+            margin: 15mm; /* 여백을 조금 줄여서 공간 확보 */
+        }
+
+        body {
+            font-family: 'NanumGothic';
+            line-height: 1.4;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* 이미지 설정: 너무 크면 다음 페이지로 밀리므로 max-height 부여 */
+        .snapshot {
+            display: block;
+            max-width: 100%;
+            max-height: 450px; /* A4 용지 절반 정도만 차지하게 제한 */
+            height: auto;
+            margin: 0 auto 20px; /* 가운데 정렬 및 아래 여백 */
+            object-fit: contain;
+        }
+
+        /* 제목과 본문 사이 간격 조절 */
+        h3 {
+            margin-top: 20px;
+            margin-bottom: 8px;
+            color: #000;
+            page-break-after: avoid; /* 제목만 혼자 페이지 끝에 남지 않게 설정 */
+        }
+
+        p {
+            margin: 0 0 10px 0;
+            word-wrap: break-word; /* 긴 텍스트 줄바꿈 */
+        }
+
+        /* 채팅 박스: 박스 중간에서 페이지가 잘리지 않도록 설정 */
+        .chat-box {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+            page-break-inside: avoid; /* 채팅 내용이 페이지 중간에 걸치면 통째로 다음 페이지로 */
+        }
+    </style>
+</head>
+<body>
+    <img th:src="${modelImage}" class="snapshot" />
+
+    <h3>완제품 이름</h3>
+    <p th:text="${title}">완제품 이름</p>
+
+    <h3>완제품 개요</h3>
+    <p th:text="${overview}">완제품 개요</p>
+
+    <h3>완제품 설명</h3>
+    <p th:text="${theory}">완제품 설명</p>
+
+    <h3>메모 기록</h3>
+    <p th:text="${memo}">메모 내용.</p>
+
+    <h3>AI 대화 기록</h3>
+    <div th:each="chat : ${chatLogs}" class="chat-box">
+        <strong th:text="${chat.question}">User</strong>:
+        <span th:text="${chat.answer}">대화 내용</span>
+    </div>
+</body>
+</html>
