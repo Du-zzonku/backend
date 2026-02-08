@@ -37,3 +37,8 @@ out/
 
 ### VS Code ###
 .vscode/
+../.vscode/
+
+# dotenv
+.env
+.env.*
