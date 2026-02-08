@@ -32,11 +32,13 @@ dependencies {
     runtimeOnly 'org.postgresql:postgresql'
     implementation 'com.pgvector:pgvector:0.1.6'
 
+    // PDF ingest
+    implementation 'org.apache.pdfbox:pdfbox:3.0.2'
+
     // swagger-ui
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
     // pdf 변환
-    implementation 'com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10'
-
+    implementation 'io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.24'
 
     // dev/test
     runtimeOnly 'com.h2database:h2'
