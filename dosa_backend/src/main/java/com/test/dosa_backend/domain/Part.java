@@ -20,6 +20,7 @@ public class Part extends BaseEntity {
 
     private String glbUrl;
 
+    @Column(columnDefinition = "TEXT")
     private String summary;
 
     private String materialType;

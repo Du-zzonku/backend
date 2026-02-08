@@ -20,6 +20,7 @@ public class Model extends BaseEntity {
 
     private String overview;
 
+    @Column(columnDefinition = "TEXT")
     private String theory;
 
 }
