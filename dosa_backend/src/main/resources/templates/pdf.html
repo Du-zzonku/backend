@@ -47,6 +47,16 @@
             background-color: #f9f9f9;
             page-break-inside: avoid; /* 채팅 내용이 페이지 중간에 걸치면 통째로 다음 페이지로 */
         }
+
+        .question-content{
+            white-space: pre-wrap;
+        }
+
+        .answer-content {
+            white-space: pre-wrap;
+            margin-top: 8px; /* 질문과 답변 사이 간격 */
+            color: #333;
+        }
     </style>
 </head>
 <body>
@@ -59,21 +69,22 @@
     <p th:text="${overview}">완제품 개요</p>
 
     <h3>완제품 설명</h3>
-    <p th:text="${theory}">완제품 설명</p>
+    <div class="markdown-content" th:utext="${theory}">완제품 설명</div>
 
     <h3>메모 기록</h3>
     <p th:text="${memo}">메모 내용.</p>
 
     <h3>AI 대화 기록</h3>
     <div th:each="chat : ${chatLogs}" class="chat-box">
-        <strong th:text="${chat.question}">User</strong>:
-        <span th:text="${chat.answer}">대화 내용</span>
+        <div class="question-content">질문: <span th:text="${chat.question}">질문</span></div>
+        <div class="answer-content" th:utext="${chat.answer}">AI 답변</div>
     </div>
 
     <h3>퀴즈 기록</h3>
     <div th:each="quiz : ${quizs}" class="chat-box">
-        <strong th:text="${quiz.getQuizQuestion()}">퀴즈 질문</strong>:
-        <span th:text="${quiz.getQuizAnswer()}">퀴즈 정답</span>
+        <div class="question-content">질문: <span th:text="${quiz.getQuizQuestion()}">질문</span></div>
+        <div class="answer-content" th:utext="${quiz.getQuizAnswer()}">퀴즈 정답</div>
+        <div class="answer-content" th:utext="${quiz.getExplanation()}">퀴즈 해설</div>
     </div>
 
 </body>

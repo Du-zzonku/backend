@@ -46,6 +46,9 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // markdown 적용
+    implementation 'com.atlassian.commonmark:commonmark:0.17.0'
 }
 
 tasks.named('test') {
