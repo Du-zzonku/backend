@@ -9,4 +9,5 @@ public class QuizSet {
 
     private String quizAnswer;
 
+    private String explanation;
 }
