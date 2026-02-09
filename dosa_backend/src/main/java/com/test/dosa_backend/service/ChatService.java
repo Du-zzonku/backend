@@ -1,29 +1,31 @@
 package com.test.dosa_backend.service;
 
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.test.dosa_backend.config.ChatPromptProperties;
 import com.test.dosa_backend.domain.Part;
 import com.test.dosa_backend.dto.ChatDtos;
 import com.test.dosa_backend.openai.OpenAiClient;
 import com.test.dosa_backend.repository.PartRepository;
 import com.test.dosa_backend.util.ImageInputs;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.ObjectMapper;
 
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class ChatService {
@@ -75,6 +77,7 @@ public class ChatService {
     @Transactional(readOnly = true)
     public ChatTurnResult userMessage(
             String userText,
+            Boolean useRag,
             List<UUID> documentIds,
             List<String> imageUrls,
             Map<String, Object> extraMetadata,
@@ -85,15 +88,18 @@ public class ChatService {
         }
 
         List<String> normalizedImages = ImageInputs.normalizeImageInputs(imageUrls);
-        boolean useRag = (documentIds != null && !documentIds.isEmpty());
-        RagService.RagResult rag = useRag ? ragService.retrieve(userText, 6, documentIds)
-                : new RagService.RagResult("", List.of());
-
+        boolean ragEnabled = Boolean.TRUE.equals(useRag);
+        List<UUID> normalizedDocumentIds = normalizeDocumentIds(documentIds);
         String effectiveModelId = resolveEffectiveModelId(extraMetadata);
         Map<String, Object> metadataForPrompt = enrichMetadataForPrompt(extraMetadata, effectiveModelId);
+        String ragQuery = buildRagQuery(userText, metadataForPrompt, history);
+
+        RagService.RagResult rag = ragEnabled ? ragService.retrieve(ragQuery, 2, normalizedDocumentIds)
+                : new RagService.RagResult("", List.of());
+
         AppliedSystemPrompt appliedSystemPrompt = resolveAppliedSystemPrompt(effectiveModelId);
-        String prompt = buildUserPrompt(userText, rag.contextText(), metadataForPrompt, useRag, effectiveModelId);
-        String instructions = buildSystemInstructions(useRag, appliedSystemPrompt);
+        String prompt = buildUserPrompt(userText, rag.contextText(), metadataForPrompt, ragEnabled, effectiveModelId);
+        String instructions = buildSystemInstructions(ragEnabled, appliedSystemPrompt);
         List<OpenAiClient.ChatInputMessage> conversation = buildConversation(history, prompt, normalizedImages);
 
         log.info("Using chat model='{}', modelId='{}', historyCount={}",
@@ -103,6 +109,93 @@ public class ChatService {
 
         String assistantText = openAiClient.generateResponse(chatModel, instructions, conversation, DEFAULT_MAX_OUTPUT_TOKENS);
         return new ChatTurnResult(assistantText, rag.citations(), appliedSystemPrompt);
+    }
+
+    private List<UUID> normalizeDocumentIds(List<UUID> documentIds) {
+        if (documentIds == null) {
+            return null;
+        }
+        List<UUID> filtered = documentIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        return filtered.isEmpty() ? null : filtered;
+    }
+
+    private String buildRagQuery(
+            String userText,
+            Map<String, Object> metadataForPrompt,
+            List<ChatDtos.HistoryMessage> history
+    ) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("User question:\n").append(userText == null ? "" : userText.trim()).append("\n");
+
+        String recentHistory = recentHistoryForRag(history);
+        if (!recentHistory.isBlank()) {
+            sb.append("\nRecent conversation:\n").append(recentHistory).append("\n");
+        }
+
+        String metadataSummary = metadataSummaryForRag(metadataForPrompt);
+        if (!metadataSummary.isBlank()) {
+            sb.append("\nModel/parts context:\n").append(metadataSummary).append("\n");
+        }
+
+        String out = sb.toString().trim();
+        if (out.length() > 4000) {
+            return out.substring(0, 4000);
+        }
+        return out;
+    }
+
+    private String recentHistoryForRag(List<ChatDtos.HistoryMessage> history) {
+        if (history == null || history.isEmpty()) {
+            return "";
+        }
+        int from = Math.max(0, history.size() - 6);
+        StringBuilder sb = new StringBuilder();
+        for (int i = from; i < history.size(); i++) {
+            ChatDtos.HistoryMessage msg = history.get(i);
+            if (msg == null || msg.content() == null || msg.content().isBlank()) {
+                continue;
+            }
+            String role = normalizeRole(msg.role());
+            if (!"user".equals(role) && !"assistant".equals(role)) {
+                continue;
+            }
+            sb.append(role).append(": ").append(msg.content().trim()).append("\n");
+        }
+        return sb.toString().trim();
+    }
+
+    @SuppressWarnings("unchecked")
+    private String metadataSummaryForRag(Map<String, Object> metadataForPrompt) {
+        if (metadataForPrompt == null || metadataForPrompt.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        Object modelObj = metadataForPrompt.get(KEY_MODEL);
+        if (modelObj instanceof Map<?, ?> model) {
+            String modelId = firstNonBlank(model.get("modelId"), model.get("model_id"));
+            String title = firstNonBlank(model.get("title"));
+            if (modelId != null) sb.append("- modelId: ").append(modelId).append("\n");
+            if (title != null) sb.append("- modelTitle: ").append(title).append("\n");
+        }
+        Object partsObj = metadataForPrompt.get(KEY_PARTS);
+        if (partsObj instanceof List<?> parts && !parts.isEmpty()) {
+            sb.append("- selectedParts:\n");
+            for (Object partObj : parts) {
+                if (!(partObj instanceof Map<?, ?> part)) continue;
+                String partId = firstNonBlank(part.get("partId"), part.get("part_id"));
+                if (partId == null) continue;
+                String displayNameKo = firstNonBlank(part.get("displayNameKo"));
+                String summary = firstNonBlank(part.get("summary"));
+                sb.append("  - ").append(partId);
+                if (displayNameKo != null) sb.append(" / ").append(displayNameKo);
+                if (summary != null) sb.append(" / ").append(summary);
+                sb.append("\n");
+            }
+        }
+        return sb.toString().trim();
     }
 
     private List<OpenAiClient.ChatInputMessage> buildConversation(

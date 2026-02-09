@@ -34,11 +34,12 @@ public class ChatController {
     }
 
     @PostMapping("/messages")
-    @Operation(summary = "Send a chat message")
+    @Operation(summary = "Send a chat message", description = "Set useRag=true to enable RAG. If useRag=true and documentIds is empty, all ingested documents are searched.")
     public ChatDtos.MessageResponse message(@Valid @RequestBody ChatDtos.MessageRequest req) {
         Map<String, Object> effectiveMetadata = mergeRequestMetadata(req);
         var res = chatService.userMessage(
                 req.message(),
+                req.useRag(),
                 req.documentIds(),
                 req.imageUrls(),
                 effectiveMetadata,
@@ -54,6 +55,8 @@ public class ChatController {
     @Operation(summary = "Send a chat message with uploaded image file(s) and optional metadata/history")
     public ChatDtos.MessageResponse messageMultipart(
             @Parameter(description = "User message text") @RequestPart("message") String message,
+            @Parameter(description = "Enable/disable RAG retrieval for this turn")
+            @RequestParam(value = "useRag", required = false) Boolean useRag,
             @Parameter(description = "Optional document UUIDs (repeat the field)") @RequestPart(value = "documentIds", required = false) List<UUID> documentIds,
             @Parameter(description = "Optional metadata as a JSON object string") @RequestPart(value = "extraMetadata", required = false) String extraMetadataJson,
             @Parameter(description = "Optional history as JSON array string") @RequestPart(value = "history", required = false) String historyJson,
@@ -70,7 +73,7 @@ public class ChatController {
         List<ChatDtos.HistoryMessage> history = parseHistory(historyJson);
         List<String> imageInputs = ImageInputs.filesToDataUrls(images);
 
-        var res = chatService.userMessage(message, documentIds, imageInputs, extraMetadata, history);
+        var res = chatService.userMessage(message, useRag, documentIds, imageInputs, extraMetadata, history);
         return toMessageResponse(res);
     }
 

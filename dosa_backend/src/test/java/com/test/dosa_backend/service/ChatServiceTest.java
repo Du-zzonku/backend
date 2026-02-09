@@ -1,6 +1,7 @@
 package com.test.dosa_backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -58,6 +59,7 @@ class ChatServiceTest {
 
         ChatService.ChatTurnResult result = chatService.userMessage(
                 "new question",
+                true,
                 List.of(docId),
                 List.of("https://example.com/a.png"),
                 Map.of(
@@ -121,6 +123,7 @@ class ChatServiceTest {
 
         ChatService.ChatTurnResult result = chatService.userMessage(
                 "v4 엔진의 토크 전달 흐름 설명해줘",
+                false,
                 List.of(),
                 List.of(),
                 null,
@@ -162,6 +165,7 @@ class ChatServiceTest {
 
         ChatService.ChatTurnResult result = chatService.userMessage(
                 "기본 동작 설명",
+                false,
                 List.of(),
                 List.of(),
                 null,
@@ -203,6 +207,7 @@ class ChatServiceTest {
 
         chatService.userMessage(
                 "설명해줘",
+                false,
                 List.of(),
                 List.of(),
                 Map.of(
@@ -225,5 +230,63 @@ class ChatServiceTest {
         assertThat(finalPrompt).contains("\"title\":\"V4 Engine Assembly\"");
         assertThat(finalPrompt).doesNotContain("\"overview\"");
         assertThat(finalPrompt).doesNotContain("\"theory\"");
+    }
+
+    @Test
+    void userMessage_useRag_true_with_empty_document_ids_queries_all_documents_and_uses_multi_source_query() {
+        RagService ragService = mock(RagService.class);
+        OpenAiClient openAiClient = mock(OpenAiClient.class);
+        PartRepository partRepository = mock(PartRepository.class);
+
+        ChatPromptProperties props = new ChatPromptProperties();
+        props.setRootSystemPrompt("ROOT_PROMPT");
+        props.setModelSystemPrompts(Map.of("v4_engine", "V4_ENGINE_PROMPT"));
+
+        Part crankshaft = mock(Part.class);
+        Model model = mock(Model.class);
+        when(model.getModelId()).thenReturn("v4_engine");
+        when(crankshaft.getPartId()).thenReturn("CRANKSHAFT");
+        when(crankshaft.getModel()).thenReturn(model);
+        when(crankshaft.getDisplayNameKo()).thenReturn("크랭크샤프트");
+        when(crankshaft.getSummary()).thenReturn("엔진의 중심 축");
+
+        when(partRepository.findAllById(anyList())).thenReturn(List.of(crankshaft));
+        when(ragService.retrieve(anyString(), anyInt(), any())).thenReturn(new RagService.RagResult("", List.of()));
+        when(openAiClient.generateResponse(anyString(), anyString(), anyList(), anyInt()))
+                .thenReturn("assistant answer");
+
+        ChatService chatService = new ChatService(
+                ragService,
+                openAiClient,
+                partRepository,
+                props,
+                "gpt-5-mini"
+        );
+
+        chatService.userMessage(
+                "v4 엔진 설명해줘",
+                true,
+                List.of(),
+                List.of(),
+                Map.of(
+                        "model", Map.of("modelId", "v4_engine", "title", "V4 Engine Assembly"),
+                        "parts", List.of(Map.of("partId", "CRANKSHAFT"))
+                ),
+                List.of(
+                        new ChatDtos.HistoryMessage("user", "이전 질문"),
+                        new ChatDtos.HistoryMessage("assistant", "이전 답변")
+                )
+        );
+
+        ArgumentCaptor<String> ragQueryCaptor = ArgumentCaptor.forClass(String.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<UUID>> docIdsCaptor = (ArgumentCaptor<List<UUID>>) (ArgumentCaptor<?>) ArgumentCaptor.forClass(List.class);
+        verify(ragService).retrieve(ragQueryCaptor.capture(), anyInt(), docIdsCaptor.capture());
+
+        assertThat(docIdsCaptor.getValue()).isNull();
+        assertThat(ragQueryCaptor.getValue()).contains("User question");
+        assertThat(ragQueryCaptor.getValue()).contains("Recent conversation");
+        assertThat(ragQueryCaptor.getValue()).contains("modelId: v4_engine");
+        assertThat(ragQueryCaptor.getValue()).contains("CRANKSHAFT / 크랭크샤프트 / 엔진의 중심 축");
     }
 }
