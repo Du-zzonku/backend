@@ -39,6 +39,9 @@ public class PdfTextExtractor {
         if (s == null) return "";
         // Reduce weird whitespace; keep line breaks as single \n
         s = s.replace("\r\n", "\n").replace("\r", "\n");
+        // Remove null byte and non-printable control chars that break PostgreSQL UTF-8 inserts.
+        s = s.replace("\u0000", "");
+        s = s.replaceAll("[\\x00-\\x08\\x0B\\x0E-\\x1F\\x7F]", " ");
         s = s.replaceAll("[\t\f]", " ");
         s = s.replaceAll("[ ]{2,}", " ");
         s = s.replaceAll("\n{3,}", "\n\n");

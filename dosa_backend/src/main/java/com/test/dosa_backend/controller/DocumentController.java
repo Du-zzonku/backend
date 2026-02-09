@@ -18,6 +18,8 @@ import com.test.dosa_backend.dto.DocumentDtos;
 import com.test.dosa_backend.service.DocumentService;
 import com.test.dosa_backend.service.IngestService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
@@ -33,6 +35,7 @@ public class DocumentController {
         this.ingestService = ingestService;
     }
 
+    @Operation(summary = "Upload a PDF document")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public DocumentDtos.DocumentResponse upload(
             @RequestPart("file") MultipartFile file,
@@ -42,21 +45,33 @@ public class DocumentController {
         return new DocumentDtos.DocumentResponse(doc.getId(), doc.getTitle(), doc.getStatus(), doc.getCreatedAt(), doc.getUpdatedAt());
     }
 
-    @GetMapping("/{id}")
-    public DocumentDtos.DocumentResponse get(@PathVariable UUID id) {
-        Document doc = documentService.get(id).orElseThrow(() -> new IllegalArgumentException("document not found"));
+    @Operation(summary = "Get document status by documentId")
+    @GetMapping("/{documentId}")
+    public DocumentDtos.DocumentResponse get(
+            @Parameter(description = "Document ID (UUID)", required = true)
+            @PathVariable UUID documentId
+    ) {
+        Document doc = documentService.get(documentId).orElseThrow(() -> new IllegalArgumentException("document not found"));
         return new DocumentDtos.DocumentResponse(doc.getId(), doc.getTitle(), doc.getStatus(), doc.getCreatedAt(), doc.getUpdatedAt());
     }
 
-    @PostMapping("/{id}/ingest")
-    public DocumentDtos.IngestJobResponse ingest(@PathVariable UUID id) {
-        IngestJob job = ingestService.createJob(id);
+    @Operation(summary = "Create and start ingest job for a document")
+    @PostMapping("/{documentId}/ingest")
+    public DocumentDtos.IngestJobResponse ingest(
+            @Parameter(description = "Document ID (UUID)", required = true)
+            @PathVariable UUID documentId
+    ) {
+        IngestJob job = ingestService.createJob(documentId);
         ingestService.runJobAsync(job.getId());
-        return new DocumentDtos.IngestJobResponse(job.getId(), id, job.getStatus().name(), job.getCreatedAt(), job.getStartedAt(), job.getFinishedAt(), job.getChunkCount(), job.getEmbeddingModel(), job.getErrorMessage());
+        return new DocumentDtos.IngestJobResponse(job.getId(), documentId, job.getStatus().name(), job.getCreatedAt(), job.getStartedAt(), job.getFinishedAt(), job.getChunkCount(), job.getEmbeddingModel(), job.getErrorMessage());
     }
 
+    @Operation(summary = "Get ingest job status by jobId")
     @GetMapping("/ingest-jobs/{jobId}")
-    public DocumentDtos.IngestJobResponse ingestJob(@PathVariable UUID jobId) {
+    public DocumentDtos.IngestJobResponse ingestJob(
+            @Parameter(description = "Ingest job ID (UUID)", required = true)
+            @PathVariable UUID jobId
+    ) {
         IngestJob job = ingestService.getJob(jobId);
         return new DocumentDtos.IngestJobResponse(job.getId(), job.getDocument().getId(), job.getStatus().name(), job.getCreatedAt(), job.getStartedAt(), job.getFinishedAt(), job.getChunkCount(), job.getEmbeddingModel(), job.getErrorMessage());
     }

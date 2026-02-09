@@ -3,6 +3,9 @@ package com.test.dosa_backend.domain;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -29,6 +32,7 @@ public class DocumentChunk {
     @Column(name = "content_text", nullable = false, columnDefinition = "text")
     private String contentText;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "meta", nullable = false, columnDefinition = "jsonb")
     private String metaJson;
 

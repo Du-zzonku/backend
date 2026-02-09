@@ -1,56 +1,67 @@
 package com.test.dosa_backend.rag;
 
-import com.pgvector.PGvector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
-
-import javax.sql.DataSource;
-import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Repository
 public class VectorStoreRepository {
 
+    private static final Logger log = LoggerFactory.getLogger(VectorStoreRepository.class);
     private final JdbcTemplate jdbcTemplate;
 
-    public VectorStoreRepository(JdbcTemplate jdbcTemplate, DataSource dataSource) {
+    public VectorStoreRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
-        // Register pgvector types once (best-effort)
-        try (Connection conn = dataSource.getConnection()) {
-            PGvector.registerTypes(conn);
-        } catch (Exception ignored) {
-            // If this fails (e.g., H2 tests), we still allow the app to start.
+        ensureSchema();
+    }
+
+    private void ensureSchema() {
+        try {
+            jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS vector");
+            jdbcTemplate.execute(
+                    "CREATE TABLE IF NOT EXISTS chunk_embeddings (" +
+                            "chunk_id UUID PRIMARY KEY REFERENCES document_chunks(id) ON DELETE CASCADE," +
+                            "embedding vector NOT NULL," +
+                            "model VARCHAR(255)," +
+                            "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()" +
+                            ")"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to ensure vector schema; ingest may fail until schema is created manually.", e);
         }
     }
 
     public void upsertEmbedding(UUID chunkId, float[] embedding, String model) {
+        String vectorLiteral = toVectorLiteral(embedding);
+        String sql = "INSERT INTO chunk_embeddings (chunk_id, embedding, model, created_at) " +
+                "VALUES (?, '" + vectorLiteral + "'::vector, ?, NOW()) " +
+                "ON CONFLICT (chunk_id) DO UPDATE SET embedding = EXCLUDED.embedding, model = EXCLUDED.model";
         jdbcTemplate.update(
-                "INSERT INTO chunk_embeddings (chunk_id, embedding, model, created_at) VALUES (?,?,?,?) " +
-                        "ON CONFLICT (chunk_id) DO UPDATE SET embedding = EXCLUDED.embedding, model = EXCLUDED.model",
+                sql,
                 chunkId,
-                new PGvector(embedding),
-                model,
-                Instant.now()
+                model
         );
     }
 
     public List<SearchHit> similaritySearch(float[] queryEmbedding, int topK, List<UUID> documentIds) {
         if (topK <= 0) topK = 5;
 
+        String queryVector = "'" + toVectorLiteral(queryEmbedding) + "'::vector";
         String sql = "SELECT c.id AS chunk_id, c.document_id, c.chunk_index, c.content_text, c.meta, d.title AS doc_title, " +
-                "(e.embedding <=> ?) AS distance " +
+                "(e.embedding <=> " + queryVector + ") AS distance " +
                 "FROM document_chunks c " +
                 "JOIN chunk_embeddings e ON e.chunk_id = c.id " +
                 "JOIN documents d ON d.id = c.document_id ";
 
         // We intentionally avoid JDBC uuid[] binding quirks by generating an IN (...) clause.
         List<Object> params = new java.util.ArrayList<>();
-        params.add(new PGvector(queryEmbedding));
 
         if (documentIds != null && !documentIds.isEmpty()) {
             sql += "WHERE c.document_id IN (";
@@ -62,8 +73,7 @@ public class VectorStoreRepository {
             sql += ") ";
         }
 
-        sql += "ORDER BY e.embedding <=> ? LIMIT ?";
-        params.add(new PGvector(queryEmbedding));
+        sql += "ORDER BY e.embedding <=> " + queryVector + " LIMIT ?";
         params.add(topK);
 
         return jdbcTemplate.query(sql, params.toArray(), new SearchHitRowMapper());
@@ -93,4 +103,18 @@ public class VectorStoreRepository {
             String documentTitle,
             double distance
     ) {}
+
+    private String toVectorLiteral(float[] embedding) {
+        if (embedding == null || embedding.length == 0) {
+            throw new IllegalArgumentException("Embedding vector must not be empty.");
+        }
+        StringBuilder sb = new StringBuilder(embedding.length * 8);
+        sb.append('[');
+        for (int i = 0; i < embedding.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(String.format(Locale.US, "%.8f", embedding[i]));
+        }
+        sb.append(']');
+        return sb.toString();
+    }
 }
