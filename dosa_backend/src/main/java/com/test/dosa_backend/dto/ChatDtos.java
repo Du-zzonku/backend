@@ -2,6 +2,8 @@ package com.test.dosa_backend.dto;
 
 import com.test.dosa_backend.service.RagService;
 import com.fasterxml.jackson.annotation.JsonAlias;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
@@ -18,6 +20,9 @@ public class ChatDtos {
 
     public record MessageRequest(
             @NotBlank String message,
+            @Schema(description = "Enable/disable RAG retrieval for this turn")
+            Boolean useRag,
+            @ArraySchema(schema = @Schema(format = "uuid"), arraySchema = @Schema(description = "Optional RAG document filter. If useRag=true and empty/omitted, search all ingested documents."))
             List<UUID> documentIds,
             List<String> imageUrls,
             Map<String, Object> extraMetadata,

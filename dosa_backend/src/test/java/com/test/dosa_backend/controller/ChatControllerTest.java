@@ -43,12 +43,13 @@ class ChatControllerTest {
                 true,
                 "V4_ENGINE_PROMPT"
         );
-        when(chatService.userMessage(anyString(), any(), any(), any(), any()))
+        when(chatService.userMessage(anyString(), any(), any(), any(), any(), any()))
                 .thenReturn(new ChatService.ChatTurnResult("ok", List.of(), applied));
 
         String body = """
                 {
                   "message": "hello",
+                  "useRag": true,
                   "documentIds": [],
                   "imageUrls": ["https://example.com/a.png"],
                   "extraMetadata": {"userId":"u-1","client":"swagger"},
@@ -82,7 +83,7 @@ class ChatControllerTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ChatDtos.HistoryMessage>> historyCaptor = (ArgumentCaptor<List<ChatDtos.HistoryMessage>>) (ArgumentCaptor<?>) ArgumentCaptor.forClass(List.class);
 
-        verify(chatService).userMessage(eq("hello"), any(), imagesCaptor.capture(), metaCaptor.capture(), historyCaptor.capture());
+        verify(chatService).userMessage(eq("hello"), eq(true), any(), imagesCaptor.capture(), metaCaptor.capture(), historyCaptor.capture());
 
         assertThat(imagesCaptor.getValue()).containsExactly("https://example.com/a.png");
         assertThat(metaCaptor.getValue()).containsEntry("userId", "u-1").containsEntry("client", "swagger");
@@ -98,7 +99,7 @@ class ChatControllerTest {
 
     @Test
     void message_multipart_accepts_uploaded_image_metadata_and_history_json() throws Exception {
-        when(chatService.userMessage(anyString(), any(), any(), any(), any()))
+        when(chatService.userMessage(anyString(), any(), any(), any(), any(), any()))
                 .thenReturn(new ChatService.ChatTurnResult("ok", List.of()));
 
         MockMultipartFile message = new MockMultipartFile(
@@ -128,6 +129,7 @@ class ChatControllerTest {
 
         mvc.perform(multipart("/v1/chat/messages:multipart")
                         .file(message)
+                        .param("useRag", "true")
                         .file(extraMetadata)
                         .file(history)
                         .file(image))
@@ -137,7 +139,7 @@ class ChatControllerTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<String>> imagesCaptor = (ArgumentCaptor<List<String>>) (ArgumentCaptor<?>) ArgumentCaptor.forClass(List.class);
 
-        verify(chatService).userMessage(eq("hello"), any(), imagesCaptor.capture(), any(), any());
+        verify(chatService).userMessage(eq("hello"), eq(true), any(), imagesCaptor.capture(), any(), any());
 
         assertThat(imagesCaptor.getValue()).hasSize(1);
         assertThat(imagesCaptor.getValue().get(0)).startsWith("data:image/png;base64,");

@@ -2,6 +2,7 @@ package com.test.dosa_backend.controller;
 
 import com.test.dosa_backend.dto.RagDtos;
 import com.test.dosa_backend.service.RagService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +18,7 @@ public class RagController {
         this.ragService = ragService;
     }
 
+    @Operation(summary = "Search RAG context", description = "If documentIds is empty or omitted, search across all ingested documents.")
     @PostMapping("/search")
     public RagDtos.SearchResponse search(@Valid @RequestBody RagDtos.SearchRequest req) {
         int topK = (req.topK() == null) ? 5 : req.topK();

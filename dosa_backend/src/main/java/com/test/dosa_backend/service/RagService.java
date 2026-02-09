@@ -34,12 +34,7 @@ public class RagService {
         if (query == null || query.isBlank()) {
             return emptyResult();
         }
-
-        // IMPORTANT (MVP behavior): if the user did not specify any documents,
-        // we treat this as a normal chat (no RAG). Do NOT call embeddings.
-        if (documentIds == null || documentIds.isEmpty()) {
-            return emptyResult();
-        }
+        List<UUID> normalizedDocumentIds = normalizeDocumentIds(documentIds);
 
         // If nothing has been ingested yet, don't call embeddings at all.
         // This avoids "Embeddings API call failed" for "chat-only" tests.
@@ -49,7 +44,7 @@ public class RagService {
 
         try {
             float[] qEmb = openAiClient.embedTexts(List.of(query)).get(0);
-            List<VectorStoreRepository.SearchHit> hits = vectorStoreRepository.similaritySearch(qEmb, topK, documentIds);
+            List<VectorStoreRepository.SearchHit> hits = vectorStoreRepository.similaritySearch(qEmb, topK, normalizedDocumentIds);
             List<Citation> citations = new ArrayList<>();
             StringBuilder ctx = new StringBuilder();
 
@@ -99,5 +94,16 @@ public class RagService {
 
     private RagResult emptyResult() {
         return new RagResult("", List.of());
+    }
+
+    private List<UUID> normalizeDocumentIds(List<UUID> documentIds) {
+        if (documentIds == null) {
+            return null;
+        }
+        List<UUID> filtered = documentIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        return filtered.isEmpty() ? null : filtered;
     }
 }

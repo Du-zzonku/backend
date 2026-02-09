@@ -6,6 +6,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -32,6 +34,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OpenAiException.class)
     public ResponseEntity<Map<String, Object>> handleOpenAi(OpenAiException e) {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(payload("OPENAI_ERROR", e.getMessage()));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleMaxUpload(MaxUploadSizeExceededException e) {
+        String msg = "Uploaded file is too large. Increase upload limits or upload a smaller file.";
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(payload("MAX_UPLOAD_SIZE_EXCEEDED", msg));
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<Map<String, Object>> handleMultipart(MultipartException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(payload("MULTIPART_ERROR", e.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
