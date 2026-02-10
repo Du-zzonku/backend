@@ -4,6 +4,9 @@ import com.test.dosa_backend.config.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 
+/**
+ * Model의 부품을 저장
+ */
 @Entity
 @Getter
 public class Part extends BaseEntity {

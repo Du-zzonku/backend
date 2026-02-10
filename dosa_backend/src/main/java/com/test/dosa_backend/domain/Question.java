@@ -8,6 +8,9 @@ import org.hibernate.annotations.BatchSize;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Quiz / Answer 를 저장
+ */
 @Entity
 @Getter
 @NoArgsConstructor

@@ -6,6 +6,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import lombok.Getter;
 
+/**
+ * Model 데이터 저장
+ */
 @Entity
 @Getter
 public class Model extends BaseEntity {

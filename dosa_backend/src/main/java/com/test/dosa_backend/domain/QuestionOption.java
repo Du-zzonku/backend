@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/**
+ * 객관식의 경우 문항을 저장 (ex. 1개의 객관식 문제에 5개 문항)
+ */
 @Entity
 @Getter
 @NoArgsConstructor

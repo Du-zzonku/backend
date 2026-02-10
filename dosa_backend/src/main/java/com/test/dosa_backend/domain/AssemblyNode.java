@@ -4,6 +4,10 @@ import com.test.dosa_backend.config.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 
+/**
+ * Model의 부품 위치(x, y, z), 방향(x, y, z, w), explode 값을 저장
+ * 같은 부품이여도 위치나 방향정보가 다를 수 있음
+ */
 @Entity
 @Getter
 public class AssemblyNode extends BaseEntity {
