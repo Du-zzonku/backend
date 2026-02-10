@@ -69,7 +69,8 @@
 <img width="710" height="567" alt="스크린샷 2026-02-10 오후 2 40 09" src="https://github.com/user-attachments/assets/20c00b53-c55d-4f1d-991e-c18983fd009e" />
 
 ## Sequence Diagram
-<img width="8192" height="3884" alt="GLB Model Placement Flow-2026-02-10-061226" src="https://github.com/user-attachments/assets/dc3e3507-1de7-4565-abe4-092c34683a36" />
+<img width="8191" height="3327" alt="GLB Model Placement Flow-2026-02-10-105201" src="https://github.com/user-attachments/assets/e0a0004f-783e-48a8-b502-64822e9bfbe8" />
+
 
 
 
