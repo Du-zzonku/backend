@@ -62,7 +62,8 @@
 <br>
 
 ## ERD
-![img.png](img.png)
+<img width="710" height="567" alt="스크린샷 2026-02-10 오후 2 40 09" src="https://github.com/user-attachments/assets/20c00b53-c55d-4f1d-991e-c18983fd009e" />
+
 
 ## ⚡ Technical Challenges & Solutions
 
