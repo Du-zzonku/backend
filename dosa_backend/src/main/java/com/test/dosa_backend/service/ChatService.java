@@ -236,6 +236,7 @@ public class ChatService {
 
         sb.append("\n\n[Global Answer Rules]\n");
         sb.append("- 한국어로 답변\n");
+        sb.append("- 최대한 요약하고 최소화해서 반드시 1000 토큰 이내로 답변\n");
         //sb.append("- 학습자 수준에 맞게 정확하고 이해하기 쉽게 설명\n");
         //sb.append("- 원리 -> 근거 -> 결론 순서로 설명\n");
 
