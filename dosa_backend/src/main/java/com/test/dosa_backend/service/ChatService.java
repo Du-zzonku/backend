@@ -237,12 +237,12 @@ public class ChatService {
         sb.append("\n\n[Global Answer Rules]\n");
         sb.append("- 한국어로 답변\n");
         sb.append("- 학습자 수준에 맞게 정확하고 이해하기 쉽게 설명\n");
-        sb.append("- 원리 -> 근거 -> 결론 순서로 설명\n");
+        //sb.append("- 원리 -> 근거 -> 결론 순서로 설명\n");
 
         if (useRag) {
             sb.append("- 제공된 Sources 범위 안에서만 판단\n");
             sb.append("- 문장 끝에 [S1], [S2]처럼 인용 태그를 붙이기\n");
-            sb.append("- Sources에 근거가 없으면 확답하지 말고 부족한 자료를 명시\n");
+            //sb.append("- Sources에 근거가 없으면 확답하지 말고 부족한 자료를 명시\n");
         } else {
             sb.append("- 일반 공학 지식을 사용해 답변 가능\n");
             sb.append("- 불확실하면 단정하지 말고 추가 자료 필요성을 명시\n");
