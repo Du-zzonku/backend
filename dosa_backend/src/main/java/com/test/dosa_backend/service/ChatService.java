@@ -35,6 +35,8 @@ public class ChatService {
     private static final String DEFAULT_ROOT_SYSTEM_PROMPT = "당신은 과학/공학 학습용 3D 뷰어 서비스의 AI 튜터입니다.";
     private static final int MAX_HISTORY_MESSAGES = 30;
     private static final int DEFAULT_MAX_OUTPUT_TOKENS = 700;
+    private static final int DEFAULT_RAG_HISTORY_TURNS = 3;
+    private static final int DEFAULT_RAG_QUERY_MAX_CHARS = 1200;
     private static final String KEY_MODEL = "model";
     private static final String KEY_PARTS = "parts";
     private static final Map<String, List<String>> MODEL_ID_ALIASES = Map.of(
@@ -52,18 +54,24 @@ public class ChatService {
     private final ObjectMapper mapper = new ObjectMapper();
 
     private final String chatModel;
+    private final int ragHistoryTurnsForRetrieval;
+    private final int ragQueryMaxChars;
 
     public ChatService(
             RagService ragService,
             OpenAiClient openAiClient,
             PartRepository partRepository,
             ChatPromptProperties promptProperties,
-            @Value("${openai.chat-model}") String chatModel
+            @Value("${openai.chat-model}") String chatModel,
+            @Value("${app.rag.history-turns-for-retrieval:" + DEFAULT_RAG_HISTORY_TURNS + "}") int ragHistoryTurnsForRetrieval,
+            @Value("${app.rag.query-max-chars:" + DEFAULT_RAG_QUERY_MAX_CHARS + "}") int ragQueryMaxChars
     ) {
         this.ragService = ragService;
         this.openAiClient = openAiClient;
         this.partRepository = partRepository;
         this.promptProperties = promptProperties;
+        this.ragHistoryTurnsForRetrieval = (ragHistoryTurnsForRetrieval > 0) ? ragHistoryTurnsForRetrieval : DEFAULT_RAG_HISTORY_TURNS;
+        this.ragQueryMaxChars = (ragQueryMaxChars > 0) ? ragQueryMaxChars : DEFAULT_RAG_QUERY_MAX_CHARS;
         log.info("ChatService constructor - Received chatModel value: '{}'", chatModel);
         if (chatModel == null || chatModel.isBlank()) {
             log.warn("openai.chat-model is blank; falling back to default model '{}'.", DEFAULT_CHAT_MODEL);
@@ -141,8 +149,8 @@ public class ChatService {
         }
 
         String out = sb.toString().trim();
-        if (out.length() > 4000) {
-            return out.substring(0, 4000);
+        if (out.length() > ragQueryMaxChars) {
+            return out.substring(0, ragQueryMaxChars);
         }
         return out;
     }
@@ -151,7 +159,7 @@ public class ChatService {
         if (history == null || history.isEmpty()) {
             return "";
         }
-        int from = Math.max(0, history.size() - 6);
+        int from = Math.max(0, history.size() - ragHistoryTurnsForRetrieval);
         StringBuilder sb = new StringBuilder();
         for (int i = from; i < history.size(); i++) {
             ChatDtos.HistoryMessage msg = history.get(i);

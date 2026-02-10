@@ -37,8 +37,8 @@ public class RagService {
         List<UUID> normalizedDocumentIds = normalizeDocumentIds(documentIds);
 
         // If nothing has been ingested yet, don't call embeddings at all.
-        // This avoids "Embeddings API call failed" for "chat-only" tests.
-        if (documentChunkRepository.count() == 0) {
+        // This avoids unnecessary embeddings latency for empty corpora.
+        if (!hasSearchableChunks(normalizedDocumentIds)) {
             return emptyResult();
         }
 
@@ -94,6 +94,13 @@ public class RagService {
 
     private RagResult emptyResult() {
         return new RagResult("", List.of());
+    }
+
+    private boolean hasSearchableChunks(List<UUID> documentIds) {
+        if (documentIds == null || documentIds.isEmpty()) {
+            return documentChunkRepository.existsByDocumentIsNotNull();
+        }
+        return documentChunkRepository.existsByDocument_IdIn(documentIds);
     }
 
     private List<UUID> normalizeDocumentIds(List<UUID> documentIds) {

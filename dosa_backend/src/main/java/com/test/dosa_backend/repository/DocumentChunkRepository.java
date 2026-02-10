@@ -14,6 +14,10 @@ import com.test.dosa_backend.domain.DocumentChunk;
 public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UUID> {
     List<DocumentChunk> findByDocument_IdOrderByChunkIndexAsc(UUID documentId);
 
+    boolean existsByDocumentIsNotNull();
+
+    boolean existsByDocument_IdIn(List<UUID> documentIds);
+
     @Modifying
     @Transactional
     @Query("delete from DocumentChunk c where c.document.id = :documentId")

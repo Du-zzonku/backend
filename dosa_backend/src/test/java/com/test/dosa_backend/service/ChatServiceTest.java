@@ -42,7 +42,9 @@ class ChatServiceTest {
                 openAiClient,
                 partRepository,
                 props,
-                "gpt-5-mini"
+                "gpt-5-mini",
+                3,
+                1200
         );
 
         UUID docId = UUID.randomUUID();
@@ -116,7 +118,9 @@ class ChatServiceTest {
                 openAiClient,
                 partRepository,
                 props,
-                "gpt-5-mini"
+                "gpt-5-mini",
+                3,
+                1200
         );
         when(openAiClient.generateResponse(anyString(), anyString(), anyList(), anyInt()))
                 .thenReturn("assistant answer");
@@ -158,7 +162,9 @@ class ChatServiceTest {
                 openAiClient,
                 partRepository,
                 props,
-                "gpt-5-mini"
+                "gpt-5-mini",
+                3,
+                1200
         );
         when(openAiClient.generateResponse(anyString(), anyString(), anyList(), anyInt()))
                 .thenReturn("assistant answer");
@@ -202,7 +208,9 @@ class ChatServiceTest {
                 openAiClient,
                 partRepository,
                 props,
-                "gpt-5-mini"
+                "gpt-5-mini",
+                3,
+                1200
         );
 
         chatService.userMessage(
@@ -260,7 +268,9 @@ class ChatServiceTest {
                 openAiClient,
                 partRepository,
                 props,
-                "gpt-5-mini"
+                "gpt-5-mini",
+                3,
+                1200
         );
 
         chatService.userMessage(

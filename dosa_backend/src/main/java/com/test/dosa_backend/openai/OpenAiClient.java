@@ -162,14 +162,7 @@ public class OpenAiClient {
         if (instructions != null && !instructions.isBlank()) {
             body.put("instructions", instructions);
         }
-        int effectiveMaxTokens;
-        if (responsesMaxOutputTokens > 0) {
-            effectiveMaxTokens = (maxOutputTokens > 0)
-                    ? Math.max(maxOutputTokens, responsesMaxOutputTokens)
-                    : responsesMaxOutputTokens;
-        } else {
-            effectiveMaxTokens = maxOutputTokens;
-        }
+        int effectiveMaxTokens = resolveEffectiveTokenBudget(maxOutputTokens, responsesMaxOutputTokens);
         if (effectiveMaxTokens > 0) {
             body.put("max_output_tokens", effectiveMaxTokens);
         }
@@ -249,14 +242,7 @@ public class OpenAiClient {
         log.info("Chat Completions request - Model: '{}', Instructions: {}, Message count: {}, Total text length: {}",
                 model, (instructions != null && !instructions.isBlank()), chatMessages.size(), totalInputLength);
         // GPT-5 family uses max_completion_tokens (not max_tokens)
-        int effectiveMaxCompletion;
-        if (chatMaxCompletionTokens > 0) {
-            effectiveMaxCompletion = (maxOutputTokens > 0)
-                    ? Math.max(maxOutputTokens, chatMaxCompletionTokens)
-                    : chatMaxCompletionTokens;
-        } else {
-            effectiveMaxCompletion = maxOutputTokens;
-        }
+        int effectiveMaxCompletion = resolveEffectiveTokenBudget(maxOutputTokens, chatMaxCompletionTokens);
         if (effectiveMaxCompletion > 0) {
             body.put("max_completion_tokens", effectiveMaxCompletion);
         }
@@ -329,18 +315,20 @@ public class OpenAiClient {
     }
 
     private JsonNode postJson(String path, ObjectNode body, String errorPrefix) {
-        String bodyString = null;
+        String bodyString;
         try {
             bodyString = mapper.writeValueAsString(body);
-            log.info("Request details - Path: '{}', Body size: {} bytes, Has model field: {}", 
-                     path, bodyString.length(), body.has("model"));
-            log.info("Sending request to '{}' with body: {}", path, bodyString);
+            log.info("OpenAI request path={} payload_bytes={} has_model={}",
+                    path, bodyString.length(), body.has("model"));
+            if (log.isDebugEnabled()) {
+                log.debug("OpenAI request body path={}: {}", path, bodyString);
+            }
         } catch (Exception e) {
             log.error("Could not serialize body for logging: {}", e.getMessage(), e);
             throw new OpenAiException("Failed to serialize request body", e);
         }
-        
-        // ✅ 응답을 먼저 raw string으로 받아서 로그로 남기고 -> 그 다음 JsonNode로 파싱 (가장 디버그가 잘 됨)
+
+        long startNanos = System.nanoTime();
         String raw = webClient.post()
                 .uri(path)
                 .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, "application/json")
@@ -366,11 +354,15 @@ public class OpenAiClient {
                 })
                 .block();
 
+        long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
         if (raw == null || raw.isBlank()) {
-            log.warn("OpenAI API returned empty body for path={}", path);
+            log.warn("OpenAI response empty path={} latency_ms={}", path, elapsedMs);
             return null;
         }
-        log.info("OpenAI API raw response (path={}): {}", path, raw);
+        log.info("OpenAI response path={} latency_ms={} response_bytes={}", path, elapsedMs, raw.length());
+        if (log.isDebugEnabled()) {
+            log.debug("OpenAI raw response path={}: {}", path, raw);
+        }
 
         try {
             return mapper.readTree(raw);
@@ -378,6 +370,13 @@ public class OpenAiClient {
             log.error("Failed to parse OpenAI response JSON. raw={}", raw, e);
             throw new OpenAiException("Failed to parse OpenAI response JSON", e);
         }
+    }
+
+    private int resolveEffectiveTokenBudget(int requestTokenBudget, int fallbackTokenBudget) {
+        if (requestTokenBudget > 0) {
+            return requestTokenBudget;
+        }
+        return Math.max(fallbackTokenBudget, 0);
     }
 
     private record ResponseOutcome(String text, String status, String incompleteReason) {

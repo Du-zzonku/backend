@@ -36,6 +36,13 @@ public class VectorStoreRepository {
         } catch (Exception e) {
             log.warn("Failed to ensure vector schema; ingest may fail until schema is created manually.", e);
         }
+
+        try {
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_document_chunks_document_id ON document_chunks(document_id)");
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_embedding_hnsw ON chunk_embeddings USING hnsw (embedding vector_cosine_ops)");
+        } catch (Exception e) {
+            log.warn("Failed to ensure vector indexes; similarity search may be slower until indexes are created manually.", e);
+        }
     }
 
     public void upsertEmbedding(UUID chunkId, float[] embedding, String model) {

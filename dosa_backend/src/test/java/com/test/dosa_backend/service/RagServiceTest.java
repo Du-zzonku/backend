@@ -28,7 +28,7 @@ class RagServiceTest {
 
         RagService ragService = new RagService(openAiClient, vectorStoreRepository, documentChunkRepository);
 
-        when(documentChunkRepository.count()).thenReturn(10L);
+        when(documentChunkRepository.existsByDocumentIsNotNull()).thenReturn(true);
         when(openAiClient.embedTexts(any())).thenReturn(List.of(new float[] {0.1f, 0.2f}));
         VectorStoreRepository.SearchHit hit = new VectorStoreRepository.SearchHit(
                 UUID.randomUUID(),
